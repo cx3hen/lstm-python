@@ -6,11 +6,14 @@ import os
 
 def build_multivariate_lstm_model():
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.LSTM(128, input_shape=(None, 4), return_sequences=True))
+    model.add(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True), input_shape=(None, 4)))
+    model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.LSTM(64, return_sequences=True))
+    model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.LSTM(32, return_sequences=False))
+    model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(1))
     return model
@@ -47,10 +50,14 @@ for code in stock_codes:
 
     model = build_multivariate_lstm_model()
     model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics=['mae'])
-    model.fit(X_train, Y_train, epochs=100, batch_size=32, verbose=2)
+
+    early_stopping_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+    model.fit(X_train, Y_train, epochs=100, batch_size=32, verbose=2, validation_split=0.2, callbacks=[early_stopping_callback])
 
     test_loss, test_mae = model.evaluate(X_test, Y_test, verbose=0)
     print('股票代码 {} 的测试损失 loss: {:.4f}, 测试 MAE: {:.4f}'.format(code, test_loss, test_mae))
+
 
     future_data = []
     last_data = train_data[-time_steps:][['Open', 'High', 'Low', 'Close']].values.reshape(-1, time_steps, 4)
