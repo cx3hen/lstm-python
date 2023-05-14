@@ -61,7 +61,7 @@ for code in stock_codes:
 
     future_data = []
     last_data = train_data[-time_steps:][['Open', 'High', 'Low', 'Close']].values.reshape(-1, time_steps, 4)
-    for i in range(30):
+    for i in range(7):
         predict = model.predict(last_data)
         future_data.append(predict[0][0])
 
@@ -72,7 +72,7 @@ for code in stock_codes:
         last_data = new_data
 
     future_data = np.array(future_data) * stds['Close'] + means['Close']
-    future_date_range = pd.date_range(start=df['Date'].iloc[-1], periods=30, freq='D')
+    future_date_range = pd.date_range(start=df['Date'].iloc[-1], periods=7, freq='D')
     future_df = pd.DataFrame({'date': future_date_range, 'future_data': future_data})
 
     if not os.path.exists("future_datas"):
@@ -82,3 +82,35 @@ for code in stock_codes:
     if not os.path.exists("models"):
         os.makedirs("models")
     model.save("models/" + code + "_model.h5")
+
+import matplotlib.pyplot as plt
+
+
+# 生成图表的函数
+def plot_results(y_true, y_pred, title):
+    plt.figure(figsize=(14, 7))
+    plt.plot(y_true, label='Actual')
+    plt.plot(y_pred, label='Predicted')
+    plt.title(title)
+    plt.legend()
+    plt.show()
+
+
+def plot_error_distribution(y_true, y_pred, title):
+    error = y_pred - y_true
+    plt.figure(figsize=(14, 7))
+    plt.hist(error, bins=25)
+    plt.xlabel("Prediction Error")
+    plt.ylabel("Count")
+    plt.title(title)
+    plt.show()
+
+
+# 对于每个股票代码，生成预测值并绘制图表
+for code in stock_codes:
+    model = tf.keras.models.load_model("models/" + code + "_model.h5")
+    X_test, Y_test = create_dataset(test_data, time_steps)
+    Y_pred = model.predict(X_test).flatten()
+
+    plot_results(Y_test, Y_pred, 'Stock Code: ' + code + ' Actual vs Predicted')
+    plot_error_distribution(Y_test, Y_pred, 'Stock Code: ' + code + ' Error Distribution')
