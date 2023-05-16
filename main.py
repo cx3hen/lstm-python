@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 import os
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
 
-
+# 建立 LSTM 模型
 def build_multivariate_lstm_model():
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True), input_shape=(None, 4)))
@@ -18,7 +20,7 @@ def build_multivariate_lstm_model():
     model.add(tf.keras.layers.Dense(1))
     return model
 
-
+# 创建数据集
 def create_dataset(data, time_steps=1):
     X, Y = [], []
     for i in range(len(data) - time_steps):
@@ -26,7 +28,7 @@ def create_dataset(data, time_steps=1):
         Y.append(data.iloc[i + time_steps]['Close'])
     return np.array(X), np.array(Y)
 
-
+# 股票代码
 stock_codes = ['000001', '000002', '000004', '000005', '000006', '000007', '000008', '000009', '000010', '000011',
                '000012', '000014', '000016', '000017', '600004']
 
@@ -58,6 +60,31 @@ for code in stock_codes:
     test_loss, test_mae = model.evaluate(X_test, Y_test, verbose=0)
     print('股票代码 {} 的测试损失 loss: {:.4f}, 测试 MAE: {:.4f}'.format(code, test_loss, test_mae))
 
+    # 计算均方根误差
+    rmse = np.sqrt(mean_squared_error(Y_test, model.predict(X_test)))
+    print('均方根误差: {:.4f}'.format(rmse))
+
+    # 计算 R^2
+    r2 = r2_score(Y_test, model.predict(X_test))
+    print('R^2 分数: {:.4f}'.format(r2))
+
+    # 创建并保存预测分数图表
+    # 创建并保存预测分数图表
+    if not os.path.exists("prediction_scores"):
+        os.makedirs("prediction_scores")
+    plt.figure(figsize=(10, 6))
+    bar_plot = plt.bar(['Test Loss', 'Test MAE', 'RMSE', 'R^2'], [test_loss, test_mae, rmse, r2])
+    plt.title('Prediction Scores for Stock Code ' + str(code))
+    plt.ylabel('Score')
+
+    # 在每一个条形上方添加数值
+    for rect in bar_plot:
+        height = rect.get_height()
+        plt.text(rect.get_x() + rect.get_width() / 2.0, height, f'{height:.4f}', ha='center', va='bottom')
+
+    plt.savefig('prediction_scores/' + code + '_prediction_scores.png')
+    plt.close()
+
 
     future_data = []
     last_data = train_data[-time_steps:][['Open', 'High', 'Low', 'Close']].values.reshape(-1, time_steps, 4)
@@ -83,34 +110,15 @@ for code in stock_codes:
         os.makedirs("models")
     model.save("models/" + code + "_model.h5")
 
-import matplotlib.pyplot as plt
-
-
-# 生成图表的函数
-def plot_results(y_true, y_pred, title):
-    plt.figure(figsize=(14, 7))
-    plt.plot(y_true, label='Actual')
-    plt.plot(y_pred, label='Predicted')
-    plt.title(title)
+    # plot actual vs predicted values
+    if not os.path.exists("prediction_plots"):
+        os.makedirs("prediction_plots")
+    plt.figure(figsize=(10, 6))
+    plt.plot(Y_test, label='Actual')
+    plt.plot(model.predict(X_test), label='Predicted')
+    plt.title('Actual vs Predicted Close Prices for Stock Code ' + str(code))
+    plt.xlabel('Time')
+    plt.ylabel('Price')
     plt.legend()
-    plt.show()
-
-
-def plot_error_distribution(y_true, y_pred, title):
-    error = y_pred - y_true
-    plt.figure(figsize=(14, 7))
-    plt.hist(error, bins=25)
-    plt.xlabel("Prediction Error")
-    plt.ylabel("Count")
-    plt.title(title)
-    plt.show()
-
-
-# 对于每个股票代码，生成预测值并绘制图表
-for code in stock_codes:
-    model = tf.keras.models.load_model("models/" + code + "_model.h5")
-    X_test, Y_test = create_dataset(test_data, time_steps)
-    Y_pred = model.predict(X_test).flatten()
-
-    plot_results(Y_test, Y_pred, 'Stock Code: ' + code + ' Actual vs Predicted')
-    plot_error_distribution(Y_test, Y_pred, 'Stock Code: ' + code + ' Error Distribution')
+    plt.savefig('prediction_plots/' + code + '_pred_vs_actual.png')
+    plt.close()
